@@ -10,7 +10,7 @@ func main() {
 	const filepathRoot = "."
 
 	serverHandler := http.NewServeMux()
-	srv := http.Server{
+	srv := &http.Server{
 		Addr:    ":" + port,
 		Handler: serverHandler,
 	}
