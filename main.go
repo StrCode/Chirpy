@@ -12,6 +12,8 @@ func main() {
 		Addr:    ":8080",
 	}
 
+	serverHandler.Handle("/", http.FileServer(http.Dir(".")))
+
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("the server is not working: %v", err)
 	}
