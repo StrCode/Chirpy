@@ -19,10 +19,18 @@ func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 }
 
 func (cfg *apiConfig) getMetricsData(w http.ResponseWriter, req *http.Request) {
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Content-Type", "text/html")
 	w.WriteHeader(http.StatusOK)
-	hits := fmt.Sprintf("Hits: %d", cfg.fileserverHits.Load())
-	w.Write([]byte(hits))
+	html := fmt.Sprintf(`
+    <html>
+      <body>
+        <h1>Welcome, Chirpy Admin</h1>
+        <p>Chirpy has been visited %d times!</p>
+      </body>
+    </html> `,
+		cfg.fileserverHits.Load())
+
+	w.Write([]byte(html))
 }
 
 func main() {
@@ -42,11 +50,11 @@ func main() {
 	mux.Handle("/app/", http.StripPrefix("/app",
 		apiCfg.middlewareMetricsInc(http.FileServer(http.Dir(filepathRoot)))))
 
-	mux.HandleFunc("GET /healthz", handlerReadiness)
+	mux.HandleFunc("GET /api/healthz", handlerReadiness)
 
-	mux.HandleFunc("GET /metrics", apiCfg.getMetricsData)
+	mux.HandleFunc("GET /admin/metrics", apiCfg.getMetricsData)
 
-	mux.HandleFunc("POST /reset", apiCfg.resetMetricsData)
+	mux.HandleFunc("POST /admin/reset", apiCfg.resetMetricsData)
 
 	log.Printf("Serving files from %s on port: %s\n", filepathRoot, port)
 	log.Fatal(srv.ListenAndServe())
