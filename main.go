@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 	"sync/atomic"
@@ -9,28 +8,6 @@ import (
 
 type apiConfig struct {
 	fileserverHits atomic.Int32
-}
-
-func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cfg.fileserverHits.Add(1)
-		next.ServeHTTP(w, r)
-	})
-}
-
-func (cfg *apiConfig) getMetricsData(w http.ResponseWriter, req *http.Request) {
-	w.Header().Set("Content-Type", "text/html")
-	w.WriteHeader(http.StatusOK)
-	html := fmt.Sprintf(`
-    <html>
-      <body>
-        <h1>Welcome, Chirpy Admin</h1>
-        <p>Chirpy has been visited %d times!</p>
-      </body>
-    </html> `,
-		cfg.fileserverHits.Load())
-
-	w.Write([]byte(html))
 }
 
 func main() {
@@ -52,9 +29,11 @@ func main() {
 
 	mux.HandleFunc("GET /api/healthz", handlerReadiness)
 
-	mux.HandleFunc("GET /admin/metrics", apiCfg.getMetricsData)
+	mux.HandleFunc("POST /api/validate_chirp", handlerChirpsValidate)
 
-	mux.HandleFunc("POST /admin/reset", apiCfg.resetMetricsData)
+	mux.HandleFunc("GET /admin/metrics", apiCfg.handlerMetrics)
+
+	mux.HandleFunc("POST /admin/reset", apiCfg.handlerReset)
 
 	log.Printf("Serving files from %s on port: %s\n", filepathRoot, port)
 	log.Fatal(srv.ListenAndServe())
