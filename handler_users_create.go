@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/StrCode/Chirpy/internal/auth"
+	"github.com/StrCode/Chirpy/internal/database"
 	"github.com/google/uuid"
 )
 
@@ -25,6 +26,7 @@ func (cfg *apiConfig) handleCreateUser(w http.ResponseWriter, req *http.Request)
 	}
 
 	defer req.Body.Close()
+
 	data, err := io.ReadAll(req.Body)
 	if err != nil {
 		return
@@ -41,9 +43,10 @@ func (cfg *apiConfig) handleCreateUser(w http.ResponseWriter, req *http.Request)
 		respondWithError(w, 500, "could not hash", err)
 	}
 
-	requestVals.Password = hashedPwd
-
-	newUser, err := cfg.dbQueries.CreateUser(context.Background(), requestVals.Email)
+	newUser, err := cfg.dbQueries.CreateUser(context.Background(), database.CreateUserParams{
+		Email:          requestVals.Email,
+		HashedPassword: hashedPwd,
+	})
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't create user", err)
 		return

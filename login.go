@@ -26,11 +26,13 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 
 	foundUser, err := cfg.dbQueries.GetUserByEmail(context.Background(), requestVals.Email)
 	if err != nil {
-		respondWithError(w, 401, "incorrect email or password", err)
+		respondWithError(w, 401, "incorrect email or password", nil)
+		return
 	}
 
-	if err := auth.CheckPasswordHash(requestVals.Password, foundUser.password); err != nil {
-		respondWithError(w, 401, "incorrect email or password", err)
+	if err := auth.CheckPasswordHash(requestVals.Password, foundUser.HashedPassword); err != nil {
+		respondWithError(w, 401, "incorrect email or password", nil)
+		return
 	}
 
 	user := User{
