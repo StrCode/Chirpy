@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/StrCode/Chirpy/internal/auth"
 	"github.com/google/uuid"
 )
 
@@ -19,7 +20,8 @@ type User struct {
 
 func (cfg *apiConfig) handleCreateUser(w http.ResponseWriter, req *http.Request) {
 	type requestBody struct {
-		Email string `json:"email"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
 	}
 
 	defer req.Body.Close()
@@ -33,6 +35,13 @@ func (cfg *apiConfig) handleCreateUser(w http.ResponseWriter, req *http.Request)
 	if err := json.Unmarshal(data, &requestVals); err != nil {
 		respondWithError(w, 500, "unable to marshal the data", err)
 	}
+
+	hashedPwd, err := auth.HashPassword(requestVals.Password)
+	if err != nil {
+		respondWithError(w, 500, "could not hash", err)
+	}
+
+	requestVals.Password = hashedPwd
 
 	newUser, err := cfg.dbQueries.CreateUser(context.Background(), requestVals.Email)
 	if err != nil {
