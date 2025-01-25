@@ -1,73 +1,79 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"time"
 
 	"github.com/StrCode/Chirpy/internal/auth"
-	"github.com/google/uuid"
+	"github.com/StrCode/Chirpy/internal/database"
 )
 
-type LoggedInUser struct {
-	ID        uuid.UUID `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Email     string    `json:"email"`
-	Token     string    `json:"token"`
-}
-
 func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
-	type requestBody struct {
-		Password           string `json:"password"`
-		Email              string `json:"email"`
-		Expires_in_Seconds int    `json:"expires_in_seconds"`
+	type parameters struct {
+		Password string `json:"password"`
+		Email    string `json:"email"`
+	}
+	type response struct {
+		User
+		Token        string `json:"token"`
+		RefreshToken string `json:"refresh_token"`
 	}
 
-	defer r.Body.Close()
-
-	var requestVals requestBody
 	decoder := json.NewDecoder(r.Body)
-	err := decoder.Decode(&requestVals)
+	params := parameters{}
+	err := decoder.Decode(&params)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't decode parameters", err)
 		return
 	}
 
-	foundUser, err := cfg.dbQueries.GetUserByEmail(context.Background(), requestVals.Email)
+	user, err := cfg.dbQueries.GetUserByEmail(r.Context(), params.Email)
 	if err != nil {
-		respondWithError(w, 401, "incorrect email or password", nil)
+		respondWithError(w, http.StatusUnauthorized, "Incorrect email or password", err)
 		return
 	}
 
-	if err := auth.CheckPasswordHash(requestVals.Password, foundUser.HashedPassword); err != nil {
-		respondWithError(w, 401, "incorrect email or password", nil)
+	err = auth.CheckPasswordHash(params.Password, user.HashedPassword)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Incorrect email or password", err)
 		return
 	}
 
-	expiresIn, _ := time.ParseDuration("1h")
-	if requestVals.Expires_in_Seconds != 0 {
-		expiresIn = time.Duration(requestVals.Expires_in_Seconds) * time.Second
-	}
-
-	token, err := auth.MakeJWT(
-		foundUser.ID,
+	accessToken, err := auth.MakeJWT(
+		user.ID,
 		cfg.jwtSecret,
-		expiresIn,
+		time.Hour,
 	)
 	if err != nil {
-		respondWithError(w, 401, "incorrect email or password", nil)
+		respondWithError(w, http.StatusInternalServerError, "Couldn't create access JWT", err)
 		return
 	}
 
-	user := LoggedInUser{
-		ID:        foundUser.ID,
-		CreatedAt: foundUser.CreatedAt,
-		UpdatedAt: foundUser.UpdatedAt,
-		Email:     foundUser.Email,
-		Token:     token,
+	refreshToken, err := auth.MakeRefreshToken()
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't create refresh token", err)
+		return
 	}
 
-	respondWithJSON(w, 200, user)
+	_, err = cfg.dbQueries.CreateRefreshToken(r.Context(), database.CreateRefreshTokenParams{
+		UserID:    user.ID,
+		Token:     refreshToken,
+		ExpiresAt: time.Now().UTC().Add(time.Hour * 24 * 60),
+	})
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't save refresh token", err)
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, response{
+		User: User{
+			ID:        user.ID,
+			CreatedAt: user.CreatedAt,
+			UpdatedAt: user.UpdatedAt,
+			Email:     user.Email,
+		},
+		Token:        accessToken,
+		RefreshToken: refreshToken,
+	})
 }

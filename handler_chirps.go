@@ -44,6 +44,7 @@ func (cfg *apiConfig) handlerGetChirp(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("chirpId")
 	if id == "" {
 		respondWithError(w, http.StatusBadRequest, "No ChirpId provided", nil)
+		return
 	}
 
 	chirpId, err := uuid.Parse(id)
@@ -77,6 +78,7 @@ func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, r *http.Request)
 		respondWithError(w, http.StatusUnauthorized, "Couldn't find JWT", err)
 		return
 	}
+
 	userID, err := auth.ValidateJWT(token, cfg.jwtSecret)
 	if err != nil {
 		respondWithError(w, http.StatusUnauthorized, "Couldn't validate JWT", err)
@@ -91,7 +93,7 @@ func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, r *http.Request)
 	params := parameters{}
 	isOk := decoder.Decode(&params)
 	if isOk != nil {
-		respondWithError(w, http.StatusInternalServerError, "Couldn't decode parameters", err)
+		respondWithError(w, http.StatusInternalServerError, "Couldn't decode parameters", isOk)
 		return
 	}
 
