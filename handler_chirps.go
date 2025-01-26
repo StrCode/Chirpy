@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -37,6 +38,10 @@ func (cfg *apiConfig) handlerGetAllChirps(w http.ResponseWriter, r *http.Request
 		}
 	}
 
+	sortTerm := r.URL.Query().Get("sort")
+	if sortTerm == "" {
+	}
+
 	chirps := []Chirp{}
 	for _, dbChirp := range dbChirps {
 		if authorID != uuid.Nil && dbChirp.UserID != authorID {
@@ -51,6 +56,13 @@ func (cfg *apiConfig) handlerGetAllChirps(w http.ResponseWriter, r *http.Request
 			Body:      dbChirp.Body,
 		})
 	}
+
+	slices.SortFunc(chirps, func(a, b Chirp) int {
+		if sortTerm == "desc" {
+			return b.CreatedAt.Compare(a.CreatedAt)
+		}
+		return a.CreatedAt.Compare(b.CreatedAt)
+	})
 
 	respondWithJSON(w, http.StatusOK, chirps)
 }
