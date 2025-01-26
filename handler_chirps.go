@@ -12,32 +12,47 @@ import (
 	"github.com/google/uuid"
 )
 
-type chirp struct {
-	Id        uuid.UUID `json:"id"`
+type Chirp struct {
+	ID        uuid.UUID `json:"id"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 	Body      string    `json:"body"`
-	User_Id   uuid.UUID `json:"user_id"`
+	UserID    uuid.UUID `json:"user_id"`
 }
 
 func (cfg *apiConfig) handlerGetAllChirps(w http.ResponseWriter, r *http.Request) {
-	data, err := cfg.dbQueries.GetAllChirps(context.Background())
+	dbChirps, err := cfg.dbQueries.GetAllChirps(r.Context())
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Couldn't get chirps", err)
+		respondWithError(w, http.StatusInternalServerError, "Couldn't retrieve chirps", err)
 		return
 	}
 
-	var chirps []chirp
-	for _, ch := range data {
-		chirps = append(chirps, chirp{
-			ch.ID,
-			ch.CreatedAt,
-			ch.UpdatedAt,
-			ch.Body,
-			ch.UserID,
+	authorID := uuid.Nil
+	authorIDString := r.URL.Query().Get("author_id")
+	if authorIDString != "" {
+		authorID, err = uuid.Parse(authorIDString)
+		if err != nil {
+			respondWithError(w, http.StatusBadRequest, "Invalid author ID", err)
+			return
+		}
+	}
+
+	chirps := []Chirp{}
+	for _, dbChirp := range dbChirps {
+		if authorID != uuid.Nil && dbChirp.UserID != authorID {
+			continue
+		}
+
+		chirps = append(chirps, Chirp{
+			ID:        dbChirp.ID,
+			CreatedAt: dbChirp.CreatedAt,
+			UpdatedAt: dbChirp.UpdatedAt,
+			UserID:    dbChirp.UserID,
+			Body:      dbChirp.Body,
 		})
 	}
-	respondWithJSON(w, 200, chirps)
+
+	respondWithJSON(w, http.StatusOK, chirps)
 }
 
 func (cfg *apiConfig) handlerGetChirp(w http.ResponseWriter, r *http.Request) {
@@ -59,12 +74,12 @@ func (cfg *apiConfig) handlerGetChirp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondWithJSON(w, http.StatusOK, chirp{
-		Id:        selectedChirp.ID,
+	respondWithJSON(w, http.StatusOK, Chirp{
+		ID:        selectedChirp.ID,
 		CreatedAt: selectedChirp.CreatedAt,
 		UpdatedAt: selectedChirp.UpdatedAt,
 		Body:      selectedChirp.Body,
-		User_Id:   selectedChirp.UserID,
+		UserID:    selectedChirp.UserID,
 	})
 }
 
@@ -119,12 +134,12 @@ func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	createdChirp := chirp{
-		Id:        newChirp.ID,
+	createdChirp := Chirp{
+		ID:        newChirp.ID,
 		CreatedAt: newChirp.CreatedAt,
 		UpdatedAt: newChirp.UpdatedAt,
 		Body:      newChirp.Body,
-		User_Id:   newChirp.UserID,
+		UserID:    newChirp.UserID,
 	}
 
 	respondWithJSON(w, http.StatusCreated, createdChirp)
