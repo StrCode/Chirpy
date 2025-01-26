@@ -130,6 +130,44 @@ func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, r *http.Request)
 	respondWithJSON(w, http.StatusCreated, createdChirp)
 }
 
+func (cfg *apiConfig) handlerDeleteChirp(w http.ResponseWriter, r *http.Request) {
+	chirpId, err := uuid.Parse(r.PathValue("chirpId"))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid Chirp ID", err)
+		return
+	}
+
+	access_token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "user not authorized", err)
+	}
+
+	userID, err := auth.ValidateJWT(access_token, cfg.jwtSecret)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Couldn't validate JWT", err)
+		return
+	}
+
+	selectedChirp, err := cfg.dbQueries.GetChirp(context.Background(), chirpId)
+	if err != nil {
+		respondWithError(w, http.StatusNotFound, "Couldn't get chirp", err)
+		return
+	}
+
+	if selectedChirp.UserID != userID {
+		respondWithError(w, http.StatusForbidden, "permission denied", err)
+		return
+	}
+
+	dbErr := cfg.dbQueries.DeleteChirp(context.Background(), chirpId)
+	if dbErr != nil {
+		respondWithError(w, http.StatusInternalServerError, "Could not delete chirp", err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func getCleanedBody(body string, badWords map[string]struct{}) string {
 	words := strings.Split(body, " ")
 	for i, word := range words {
