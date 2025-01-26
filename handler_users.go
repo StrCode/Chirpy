@@ -61,3 +61,53 @@ func (cfg *apiConfig) handleCreateUser(w http.ResponseWriter, req *http.Request)
 
 	respondWithJSON(w, 201, createdUser)
 }
+
+func (cfg *apiConfig) handlerUpdateUser(w http.ResponseWriter, r *http.Request) {
+	type requestBody struct {
+		Password string `json:"password"`
+		Email    string `json:"email"`
+	}
+
+	access_token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "user not authorized", err)
+	}
+
+	userID, err := auth.ValidateJWT(access_token, cfg.jwtSecret)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Couldn't validate JWT", err)
+		return
+	}
+
+	defer r.Body.Close()
+	var requestVals requestBody
+
+	decoder := json.NewDecoder(r.Body)
+	if err := decoder.Decode(&requestVals); err != nil {
+		respondWithError(w, http.StatusBadRequest, "request malformed", err)
+		return
+	}
+
+	hashedPwd, err := auth.HashPassword(requestVals.Password)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "something went wrong", err)
+		return
+	}
+
+	updatedUser, err := cfg.dbQueries.UpdateUser(context.Background(), database.UpdateUserParams{
+		Email:          requestVals.Email,
+		HashedPassword: hashedPwd,
+		ID:             userID,
+	})
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Could not update user", err)
+		return
+	}
+
+	respondWithJSON(w, 200, User{
+		updatedUser.ID,
+		updatedUser.CreatedAt,
+		updatedUser.UpdatedAt,
+		updatedUser.Email,
+	})
+}
